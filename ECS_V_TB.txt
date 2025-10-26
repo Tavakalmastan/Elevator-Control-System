@@ -1,0 +1,89 @@
+module tb_elevator; 
+ 
+    // --- Inputs & Outputs --- 
+    reg clk; 
+    reg rst; 
+    reg [3:0] floor_request; 
+ 
+    wire [1:0] current_floor; 
+    wire door_open; 
+    wire [1:0] direction; 
+ 
+    // --- File Descriptors --- 
+ 
+ 
+    integer req_file; 
+    integer status_file; 
+    integer scan_file;  
+ 
+    // --- Instantiate the Unit Under Test (UUT) --- 
+    elevator_fsm uut ( 
+        .clk(clk), 
+        .rst(rst), 
+        .floor_request(floor_request), 
+        .current_floor(current_floor), 
+        .door_open(door_open), 
+        .direction(direction) 
+    ); 
+ 
+    // --- Clock Generator (100 MHz) --- 
+    always #5 clk = ~clk;  
+ 
+    // --- Main Simulation --- 
+    initial begin 
+        // Initialize signals 
+        clk = 0; 
+        rst = 1; 
+        floor_request = 4'b0000; 
+ 
+        // Open status file (create if not exist) 
+        status_file = $fopen("status.txt", "w"); 
+        $display("Simulation started... waiting for floor requests."); 
+ 
+        #20 rst = 0; 
+ 
+        // Start monitoring files 
+        monitor_files; 
+    end 
+ 
+ 
+ 
+    // --- File I/O Task --- 
+    task monitor_files; 
+        begin 
+            forever begin 
+                // --- Read from Request File --- 
+                req_file = $fopen("requests.txt", "r"); 
+                if (req_file) begin 
+                    scan_file = $fscanf(req_file, "%b", floor_request); 
+                    $fclose(req_file); 
+ 
+                    // Optional: display debug info in Vivado console 
+                    if (floor_request != 4'b0000) 
+                        $display("New request received: %b at time %t", floor_request, $time); 
+                end else begin 
+                    floor_request = 4'b0000; 
+                end 
+ 
+                // --- Write Elevator Status to File --- 
+                status_file = $fopen("status.txt", "w"); 
+                if (status_file) begin 
+                    // Format: <current_floor> <direction> <door_open> 
+                    // direction = 0=IDLE, 1=UP, 2=DOWN 
+                    $fdisplay(status_file, "%d %d %d",  
+                        current_floor, 
+                        (direction == 2'b01) ? 1 : (direction == 2'b10) ? 2 : 0, 
+                        door_open 
+                    ); 
+                    $fclose(status_file); 
+                end 
+ 
+                // --- Wait before next update (1 µs) --- 
+                #1000;  
+            end 
+        end 
+ 
+ 
+    endtask 
+ 
+endmodule 
